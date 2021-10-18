@@ -22,7 +22,7 @@ pipeline {
             steps {
 					sh """
 					helm repo update
-					helm install jenkins-helm/logging/kubernetes-logging-2.3.0.tgz
+					helm install jenkins-helm/kubernetes-logging
 					"""
             }
 			}
