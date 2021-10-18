@@ -5,7 +5,7 @@ pipeline {
         stage('Configure Helm Repo'){
             steps{
                 sh """
-                cd /var/lib/jenkins/workspace/JFROG-integration
+                cd /var/lib/jenkins/workspace/jfrog-jenkins-integration
 				helm repo add jenkins-helm https://mohib.jfrog.io/artifactory/api/helm/jenkins-helm --username mohibjehangir@gmail.com --password APAk8SaC8hiVmPWPUeMinQxqA3N
                 """
             }
@@ -13,7 +13,7 @@ pipeline {
         stage('Deploy helm chart to Repo') {
             steps {
                  sh """
-                cd /var/lib/jenkins/workspace/JFROG-integration
+                cd /var/lib/jenkins/workspace/jfrog-jenkins-integration
                 curl -umohibjehangir@gmail.com:APAk8SaC8hiVmPWPUeMinQxqA3N -T /home/mohib/JFROG/kubernetes-logging-2.3.0.tgz "https://mohib.jfrog.io/artifactory/jenkins-helm/logging/kubernetes-logging-2.3.0.tgz"
                 """
             }
