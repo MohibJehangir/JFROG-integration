@@ -1,0 +1,238 @@
+# Default values for kubernetes-logging.
+# Global values
+cluster_name: "logging"
+imagePullSecrets: []
+priority_class: "logging"
+storage_class: "default"
+
+#ES configuration
+#A complete ES setup is provisioned when "in_cluster" is set to true. It can be scaled accordingly to the environment needs
+#with the concrete configurations of the nodes that follow.
+#In case "in_cluster" is set to false, logs are pushed to an external ES.
+opensearch:
+  image: "opensearchproject/opensearch"
+  imageTag: 1.1.0
+  imagePullPolicy: IfNotPresent  
+  single_node: false
+  in_cluster: true
+  snapshot:
+    enabled: false
+    storage_class: ""
+    size: "5Gi"
+  retention_days: 7
+  additional_jvm_params: "-Djava.net.preferIPv4Stack=true -XshowSettings:properties -XshowSettings:vm -XshowSettings:system"
+  url: ""
+  port: 9200
+  user: "osadmin"
+  password: "osadmin"
+  saml:
+    enabled: false
+    idp: {}
+      #metadata_url:
+      #entity_id:
+      #cacerts:
+    sp: {}
+      #entity_id:
+    exchange_key: ""
+    admin_role: ""
+    viewer_role: ""
+    developer_role: ""
+  oidc:
+    enabled: false
+    discovery_url: ""
+    subject_key: "email"
+    roles_key: "roles"
+    admin_role: ""
+    viewer_role: ""
+    developer_role: ""
+    cacerts: {}
+    client_id: ""
+    client_secret: ""
+    scope: "openid"
+    verify_hostnames: true
+    logout_url: ""
+
+#Opensearch Curator job configuration. It is a build of es-curator 5.8.4 /APL 2.0 license/ with a modified es version check 
+os_curator:
+  image: "nickytd/os-curator"
+  imageTag: "5.8.4"
+  imagePullPolicy: IfNotPresent
+
+#Init container configuration. Used for multiple application startup checks
+init_container:
+  image: "nickytd/init-container"
+  imageTag: "0.1.0"
+  imagePullPolicy: IfNotPresent
+
+#Configuration of ES master node if "in_cluster" is true
+master:  
+  replicas: 1
+  storage: "1Gi"
+  heap_size: "256m"
+  resources:
+    requests:
+      memory: "700Mi"
+    limits:
+      memory: "700Mi"
+  storage_class: ""
+  priority_class: ""
+  tolerations: []
+  affinity: {}    
+
+#Configuration of ES coordination node if "in_cluster" is true
+client:
+  replicas: 1
+  heap_size: "512m"
+  resources:
+    requests:
+      memory: "1000Mi"
+    limits:
+      memory: "2000Mi"
+  ingress:
+    host: ""
+    path: "/"
+    enabled: false
+    annotations: {}      
+    tls: {}  
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: {}
+  #- maxSkew: 1
+  #  topologyKey: kubernetes.io/hostname
+  #  whenUnsatisfiable: ScheduleAnyway
+  #  labelSelector:
+  #    matchLabels:
+  #      type: client
+  priority_class: ""
+
+#Configuration of ES data node if "in_cluster" is true
+data:
+  replicas: 1
+  heap_size: "512m"
+  storage: "1Gi"
+  resources:
+    requests:
+      memory: "1000Mi"
+    limits:
+      memory: "2000Mi"
+  storage_class: ""
+  priority_class: ""    
+  tolerations: []
+  affinity: {} 
+
+#when in_cluster is set to false it determines an external opensearch-dashboards instance. 
+#In this case only jobs creating index templates and opensearch-dashboards objects are executed.
+opensearch_dashboards:
+  in_cluster: true
+  url: ""  
+  replicas: 1
+  extraEnvs:
+  - name: "NODE_OPTIONS"
+    value: "--max-old-space-size=350"
+  user: "opensearch"
+  password: "opensearch"
+  readonly:
+    user: "viewer"
+    password: "view"
+  developer:
+    user: "developer"
+    password: "develop"   
+  ingress:
+    host: ""
+    path: "/"
+    enabled: false
+    annotations: {}
+    tls: {}  
+  index_patterns:
+    - containers
+    - systemd
+    - nginx    
+  tenants:
+    - Global
+    - Developer
+  resources:
+    requests:
+      memory: "500Mi"
+    limits:
+      memory: "500Mi"
+  tolerations: []
+  affinity: {}
+  priority_class: "" 
+
+fluentbit:
+  image: "fluent/fluent-bit"
+  imageTag: "1.8.1"
+  imagePullPolicy: IfNotPresent
+  host_path: /var/log
+  resources:
+    requests:
+      memory: "50Mi"
+    limits:
+      memory: "100Mi"
+  priority_class: ""
+  tolerations: []
+  affinity: {}
+  metrics:
+    enabled: false
+    interval: "30s"
+    namespace: ""
+
+fluentd:
+  replicas: 1
+  image: "nickytd/fluentd"
+  imageTag: "v1.13"
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "100Mi"
+    limits:
+      memory: "500Mi"  
+  priority_class: ""
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: {}
+  #- maxSkew: 1
+  #  topologyKey: kubernetes.io/hostname
+  #  whenUnsatisfiable: ScheduleAnyway
+  #  labelSelector:
+  #    matchLabels:
+  #      k8s-app: fluentd
+
+
+#In scaled out setup kafka queues are used as ingestion points to accommodate spiked in the logging stream volumes
+kafka:
+  enabled: true
+  replicas: 1
+  image: "wurstmeister/kafka"
+  imageTag: "2.13-2.7.0"
+  heap_size: "256m"
+  storage: "1Gi"
+  topics:
+    config: "retention.bytes=134217728,retention.ms=3600000,message.timestamp.difference.max.ms=3600000,message.timestamp.type=LogAppendTime"
+    name: ["containers"]    
+  resources:
+    requests:
+      memory: "600Mi"
+    limits:
+      memory: "600Mi"
+  storage_class: ""
+  priority_class: ""
+  tolerations: []
+  affinity: {}   
+
+#Zookeeper is a dependency of kafka
+zookeeper:
+  replicas: 1
+  image: "zookeeper"
+  imageTag: "3.7.0"
+  heap_size: "128m"
+  storage: 1Gi
+  resources:
+    requests:
+      memory: "300Mi"
+    limits:
+      memory: "300Mi"
+  storage_class: ""
+  priority_class: ""
+  tolerations: []
+  affinity: {}

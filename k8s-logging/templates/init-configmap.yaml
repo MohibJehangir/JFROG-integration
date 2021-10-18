@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name}}-init
+  labels: {{ include "logging.labels" . | indent 4 }}
+data:
+  check_host_port.sh: |-
+    #!/bin/bash
+    set -e    
+
+    if [[ $1 == http* ]]; then
+      # extract the protocol
+      proto="$(echo $1 | grep :// | sed -e's,^\(.*://\).*,\1,g')"
+      # remove the protocol
+      url="$(echo ${1/$proto/})"
+      # extract the user (if any)
+      user="$(echo $url | grep @ | cut -d@ -f1)"
+      # extract the host and port
+      hostport="$(echo ${url/$user@/} | cut -d/ -f1)"
+      # by request host without port    
+      host="$(echo $hostport | sed -e 's,:.*,,g')"
+      # by request - try to extract the port
+      port=`echo $hostport | grep : | cut -d: -f2`
+      if [[ -z $port ]]; then
+        if [[ $proto = http:// ]]; then
+          port=80
+        fi
+        if [[ $proto == https:// ]]; then 
+          port=443 
+        fi
+     fi 
+     else
+       host=$1
+       port=$2
+     fi  
+     
+     echo "checking $host:$port"
+       
+     until $(nc -z -w 5 $host $port); do 
+       echo "retrying $host:$port"
+       sleep 5
+     done  
+
+     echo "initialized"
+
+  check_os.sh: |-
+    #!/bin/bash
+    set -e
+
+    if [ -z ${os_url+x} ]; then
+      echo "opensearch url env variable (os_url) is expected but not found";
+      exit -1
+    elif [ -z ${os_user+x} ]; then
+      echo "opensearch user env variable (os_user) is expected but not found";
+      exit -1
+    elif [ -z ${os_pass+x} ]; then
+      echo "opensearch password env variable (os_pass) is expected but not found";
+      exit -1
+    fi
+
+    echo "checking opensearch $os_url"
+    
+    check="curl -sk -w "%{http_code}" -u$os_user:$os_pass $os_url -o /dev/null"
+
+    until [[ $($check) == "200" ]]; do
+      echo "retrying $os_url"
+      sleep 5
+    done
+    

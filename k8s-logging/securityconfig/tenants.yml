@@ -1,0 +1,8 @@
+---
+_meta:
+  type: "tenants"
+  config_version: 2
+
+Developer:
+  reserved: true
+  description: "opensearch-dashboards tenant for developers"

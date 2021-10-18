@@ -1,0 +1,48 @@
+---
+# In this file users, backendroles and hosts can be mapped to Open Distro Security roles.
+# Permissions for Opendistro roles are configured in roles.yml
+
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+
+# Define your roles mapping here
+
+all_access:
+  reserved: false
+  {{- with list .Values.opensearch.saml.admin_role .Values.opensearch.oidc.admin_role "administrator" | mustCompact | mustUniq }}
+  backend_roles: {{ . | toYaml | nindent 2 }}
+  {{- end }}
+  description: "Maps external os user to admin role"
+
+administrator:
+  reserved: false
+  {{- with list .Values.opensearch.saml.admin_role .Values.opensearch.oidc.admin_role "administrator" | mustCompact | mustUniq }}
+  backend_roles: {{ . | toYaml | nindent 2 }}
+  {{- end }}
+  description: "Maps external os user to admin role"
+
+opensearch-dashboards_viewer:
+  reserved: false
+  users:
+    - {{ .Values.opensearch_dashboards.readonly.user }}
+  {{- with list .Values.opensearch.saml.viewer_role .Values.opensearch.oidc.viewer_role "Viewer" | mustCompact | mustUniq }}
+  backend_roles: {{ . | toYaml | nindent 2 }}
+  {{- end }}
+  description: "Maps viewer backend role"
+
+opensearch-dashboards_developer:
+  reserved: false
+  users:
+    - {{ .Values.opensearch_dashboards.developer.user }}
+  {{- with list .Values.opensearch.saml.developer_role .Values.opensearch.oidc.developer_role "Developer" | mustCompact | mustUniq }}
+  backend_roles: {{ . | toYaml | nindent 2 }}
+  {{- end }}  
+  description: "Maps developer backend role"  
+
+kibana_user:
+  reserved: false
+  {{- with list .Values.opensearch.saml.viewer_role .Values.opensearch.oidc.viewer_role .Values.opensearch.saml.developer_role .Values.opensearch.oidc.developer_role "Viewer" "Developer" | mustCompact | mustUniq }}
+  backend_roles: {{ . | toYaml | nindent 2 }}
+  {{- end }}
+  description: "Maps viewer and developer backend roles to opensearch-dashboards_user role"      

@@ -1,0 +1,94 @@
+{{- if .Values.kafka.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-kafka
+  labels: {{ include "logging.labels" . | indent 4 }}
+spec:
+  selector:
+    matchLabels: {{ include "logging.selectorLabels" . | indent 6 }}     
+      type: kafka
+  serviceName: kafka
+  replicas: {{ .Values.kafka.replicas }}
+  template:
+    metadata:
+      labels: {{ include "logging.selectorLabels" . | indent 8 }}
+        type: kafka
+    spec:
+      priorityClassName: {{ default .Values.priority_class .Values.kafka.priority_class }}
+      {{ with .Values.kafka.affinity -}}     
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end -}}
+      {{ with .Values.kafka.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 6 }}
+      {{- end }}
+      initContainers:
+      - name: init
+        image: {{ include "init_container.image" . }}
+        imagePullPolicy: {{ .Values.init_container.imagePullPolicy }}
+        command: ["sh", "-c", "/init/check_host_port.sh $zk 2181"]
+        env:
+          - name: zk
+            value: {{ .Release.Name }}-zk-{{ (sub (.Values.zookeeper.replicas | int) 1) }}
+        volumeMounts:
+        - mountPath: "/init"
+          name: init
+      containers:
+      - name: kafka
+        image: {{ .Values.kafka.image }}:{{ .Values.kafka.imageTag }}
+        imagePullPolicy: {{ .Values.kafka.imagePullPolicy }}
+        ports:
+        - containerPort: 9092
+          name: kafka
+        - containerPort: 9093
+          name: broker
+        - containerPort: 12345
+          name: jmx
+        resources: {{ toYaml .Values.kafka.resources | nindent 10 }}
+        env:
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: {{ include "zookeeperServers" (dict "replicas" .Values.zookeeper.replicas "releaseName" $.Release.Name) }}
+        - name: BROKER_ID_COMMAND
+          value: "hostname | awk -F'-' '{print $NF}'"
+        - name: KAFKA_LISTENERS
+          value: PLAINTEXT://:9092
+        - name: KAFKA_HEAP_OPTS
+          value: "-Xmx{{ .Values.kafka.heap_size }} -Xms{{ .Values.kafka.heap_size }}"
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/opt/kafka/bin/kafka-server-stop.sh"]
+        readinessProbe:
+          tcpSocket:
+            port: kafka
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /kafka  
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: init
+        configMap:
+          name: {{ .Release.Name}}-init
+          defaultMode: 0755    
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      storageClassName: {{ default .Values.storage_class .Values.kafka.storage_class | quote }}
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.kafka.storage }}
+{{- end }}          
